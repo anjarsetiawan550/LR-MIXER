@@ -1,0 +1,41 @@
+name: Build VST3 + Standalone (Windows, ASIO)
+on:
+  push:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Unduh ASIO SDK (Steinberg)
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          if (Test-Path "ThirdParty/asiosdk/common/iasiodrv.h") { Write-Host "ASIO SDK sudah ada di repo"; exit 0 }
+          Invoke-WebRequest -Uri "https://download.steinberg.net/sdk_downloads/asiosdk_2.3.3_2019-06-14.zip" -OutFile asio.zip
+          Expand-Archive asio.zip -DestinationPath asio_tmp
+          $dir = Get-ChildItem asio_tmp -Directory | Select-Object -First 1
+          New-Item -ItemType Directory -Force ThirdParty | Out-Null
+          Move-Item $dir.FullName ThirdParty/asiosdk
+
+      - name: Configure
+        run: cmake -B build -G "Visual Studio 17 2022" -A x64
+
+      - name: Build (Release)
+        run: cmake --build build --config Release --parallel
+
+      - name: Kumpulkan hasil
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Copy-Item -Recurse "build/LRProAudioDevice_artefacts/Release/VST3" dist/VST3
+          Copy-Item -Recurse "build/LRProAudioDevice_artefacts/Release/Standalone" dist/Standalone
+          Get-ChildItem -Recurse dist | Select-Object -First 30 FullName
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LR_PRO_AUDIO_DEVICE_windows
+          path: dist
